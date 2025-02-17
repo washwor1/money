@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Dashboard</title>
+  </head>
+  <body>
+    <h1>Welcome, {{ user.username }}!</h1>
+    <p><a href="{{ url_for('logout') }}">Logout</a></p>
+    
+    <h2>Account Balances</h2>
+    <ul>
+      {% for account, balance in account_balances.items() %}
+        <li>{{ account }}: ${{ "%.2f"|format(balance) }}</li>
+      {% endfor %}
+    </ul>
+    <h3>Total Balance: ${{ "%.2f"|format(total_balance) }}</h3>
+    
+    <h2>Category Totals (Filtered)</h2>
+    <ul>
+      {% for category, total in category_totals.items() %}
+        <li>{{ category }}: ${{ "%.2f"|format(total) }}</li>
+      {% endfor %}
+    </ul>
+
+    <h2>Add Transaction</h2>
+    <form method="POST" action="{{ url_for('add_transaction') }}">
+      <label>Date:</label>
+      <input type="date" name="date" required><br>
+      <label>Account:</label>
+      <select name="account_id">
+        {% for account in user.accounts %}
+          <option value="{{ account.id }}">{{ account.name }}</option>
+        {% endfor %}
+      </select><br>
+      <label>Description:</label>
+      <input type="text" name="description" required><br>
+      <label>Amount (positive for income, negative for expense):</label>
+      <input type="number" step="0.01" name="amount" required><br>
+      <label>Category:</label>
+      <input type="text" name="category" required><br>
+      <input type="submit" value="Add Transaction">
+    </form>
+
+    <h2>Filter Transactions</h2>
+    <form method="GET" action="{{ url_for('dashboard') }}">
+      <label>Start Date:</label>
+      <input type="date" name="start_date" value="{{ start_date or '' }}"><br>
+      <label>End Date:</label>
+      <input type="date" name="end_date" value="{{ end_date or '' }}"><br>
+      <input type="submit" value="Filter">
+    </form>
+
+    <h2>Export Transactions as CSV</h2>
+    <form method="GET" action="{{ url_for('export') }}">
+      <label>Start Date:</label>
+      <input type="date" name="start_date" value="{{ start_date or '' }}"><br>
+      <label>End Date:</label>
+      <input type="date" name="end_date" value="{{ end_date or '' }}"><br>
+      <input type="submit" value="Export CSV">
+    </form>
+
+    <h2>Transaction History</h2>
+    <table border="1" cellpadding="5">
+      <tr>
+        <th>Date</th>
+        <th>Account</th>
+        <th>Description</th>
+        <th>Amount</th>
+        <th>Balance</th>
+        <th>Category</th>
+      </tr>
+      {% for txn in transactions %}
+      <tr>
+        <td>{{ txn.date.strftime('%Y-%m-%d') }}</td>
+        <td>{{ txn.account.name }}</td>
+        <td>{{ txn.description }}</td>
+        <td>{{ "%.2f"|format(txn.amount) }}</td>
+        <td>{{ "%.2f"|format(txn.balance) }}</td>
+        <td>{{ txn.category }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </body>
+</html>
