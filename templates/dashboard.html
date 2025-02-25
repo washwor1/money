@@ -2,10 +2,11 @@
 <html>
   <head>
     <title>Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('serve_css', filename='dashboard.css') }}">
   </head>
   <body>
     <h1>Welcome, {{ user.username }}!</h1>
-    <p><a href="{{ url_for('logout') }}">Logout</a></p>
+    <a href="{{ url_for('logout') }}"><button>Logout</button></a>
     
     <h2>Account Balances</h2>
     <ul>
@@ -14,71 +15,125 @@
       {% endfor %}
     </ul>
     <h3>Total Balance: ${{ "%.2f"|format(total_balance) }}</h3>
-    
-    <h2>Category Totals (Filtered)</h2>
-    <ul>
-      {% for category, total in category_totals.items() %}
-        <li>{{ category }}: ${{ "%.2f"|format(total) }}</li>
-      {% endfor %}
-    </ul>
 
-    <h2>Add Transaction</h2>
-    <form method="POST" action="{{ url_for('add_transaction') }}">
-      <label>Date:</label>
-      <input type="date" name="date" required><br>
-      <label>Account:</label>
-      <select name="account_id">
-        {% for account in user.accounts %}
-          <option value="{{ account.id }}">{{ account.name }}</option>
-        {% endfor %}
-      </select><br>
-      <label>Description:</label>
-      <input type="text" name="description" required><br>
-      <label>Amount (positive for income, negative for expense):</label>
-      <input type="number" step="0.01" name="amount" required><br>
-      <label>Category:</label>
-      <input type="text" name="category" required><br>
-      <input type="submit" value="Add Transaction">
-    </form>
+    <!-- Transaction form container -->
+    <div id="transactionFormContainer">
+      <h2>Add Transaction</h2>
+      <form method="POST" action="{{ url_for('add_transaction') }}">
+        <label>Date:</label>
+        <input type="date" name="date" required><br>
+        <label>Account:</label>
+        <select id="transactionAccountSelect" name="account_id">
+          {% for account in user.accounts %}
+            <option value="{{ account.id }}" data-type="{{ account.type }}" data-name="{{ account.name }}"
+              {% if request.args.get('filter_account_id') == account.id|string %}selected{% endif %}>
+              {{ account.name }}
+            </option>
+          {% endfor %}
+          <option value="add_account" {% if request.args.get('filter_account_id') == 'add_account' %}selected{% endif %}>
+            Add New Account
+          </option>
+        </select>
+        <!-- Remove Account button appears only for bank accounts -->
+        <button type="button" id="removeAccountButton" style="display: none;">Remove Account</button>
+        <!-- Modal Overlay for Removing an Account -->
+        <div id="removeModalOverlay" class="modal-overlay" style="display: none;">
+          <div class="modal-content">
+            <p id="removeAccountMessage">Are you sure you want to remove this account?</p>
+            <button id="confirmRemoveAccount">Yes, Remove</button>
+            <button id="cancelRemoveAccount">Cancel</button>
+          </div>
+        </div>
+        <br>
+        <div id="accountTypeDisplay" style="margin-bottom:10px;"></div>
+        <label>Description:</label>
+        <input type="text" name="description" required><br>
+        <label>Amount (positive for income, negative for expense):</label>
+        <input type="number" step="0.01" name="amount" required><br>
+        <label>Category:</label>
+        <input type="text" name="category" required><br>
+        <input type="submit" value="Add Transaction">
+      </form>
+    </div>
 
-    <h2>Filter Transactions</h2>
-    <form method="GET" action="{{ url_for('dashboard') }}">
+    <!-- Modal Overlay for Adding a New Account -->
+    <div id="modalOverlay" class="modal-overlay" style="display: none;">
+      <div class="modal-content">
+        <h3>Add Account</h3>
+        <form method="POST" action="{{ url_for('add_account') }}">
+          <label>Account Name:</label>
+          <input type="text" name="name" required><br>
+          <label>Account Type:</label>
+          <select name="type">
+            <option value="bank">Debit</option>
+            <option value="credit">Credit</option>
+          </select><br>
+          <input type="submit" value="Create Account">
+          <button type="button" id="cancelAddAccount">Cancel</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Filter and Export -->
+    <h2>Filter & Export Transactions</h2>
+    <form id="filterExportForm" method="GET" action="{{ url_for('dashboard') }}">
       <label>Start Date:</label>
-      <input type="date" name="start_date" value="{{ start_date or '' }}"><br>
+      <input id="start_date" type="date" name="start_date" value="{{ start_date or '' }}"><br>
       <label>End Date:</label>
-      <input type="date" name="end_date" value="{{ end_date or '' }}"><br>
-      <input type="submit" value="Filter">
+      <input id="end_date" type="date" name="end_date" value="{{ end_date or '' }}"><br>
+      <!-- Manual buttons in case the user wants to click them -->
+      <button type="submit" formaction="{{ url_for('dashboard') }}">Filter</button>
+      <button type="submit" formaction="{{ url_for('export') }}">Export CSV</button>
     </form>
 
-    <h2>Export Transactions as CSV</h2>
-    <form method="GET" action="{{ url_for('export') }}">
-      <label>Start Date:</label>
-      <input type="date" name="start_date" value="{{ start_date or '' }}"><br>
-      <label>End Date:</label>
-      <input type="date" name="end_date" value="{{ end_date or '' }}"><br>
-      <input type="submit" value="Export CSV">
-    </form>
-
+    <!-- Transactions Table with Removal Options -->
     <h2>Transaction History</h2>
-    <table border="1" cellpadding="5">
-      <tr>
-        <th>Date</th>
-        <th>Account</th>
-        <th>Description</th>
-        <th>Amount</th>
-        <th>Balance</th>
-        <th>Category</th>
-      </tr>
-      {% for txn in transactions %}
-      <tr>
-        <td>{{ txn.date.strftime('%Y-%m-%d') }}</td>
-        <td>{{ txn.account.name }}</td>
-        <td>{{ txn.description }}</td>
-        <td>{{ "%.2f"|format(txn.amount) }}</td>
-        <td>{{ "%.2f"|format(txn.balance) }}</td>
-        <td>{{ txn.category }}</td>
-      </tr>
-      {% endfor %}
-    </table>
+    <form id="removeTransactionsForm" method="POST" action="{{ url_for('remove_transactions') }}">
+      <table border="1" cellpadding="5">
+        <thead>
+          <tr>
+            <th>Select</th>
+            <th>Date</th>
+            <th>Account</th>
+            <th>Description</th>
+            <th>Amount</th>
+            <th>Balance</th>
+            <th>Category</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for txn in transactions %}
+          <tr>
+            <td>
+              <input type="checkbox" name="transaction_ids" value="{{ txn.id }}">
+            </td>
+            <td>{{ txn.date.strftime('%Y-%m-%d') }}</td>
+            <td>{{ txn.account.name }}</td>
+            <td>{{ txn.description }}</td>
+            <td>{{ "%.2f"|format(txn.amount) }}</td>
+            <td>{{ "%.2f"|format(txn.balance) }}</td>
+            <td>{{ txn.category }}</td>
+            <td>
+              <!-- Plain anchor link styled as a button -->
+              <a href="{{ url_for('remove_transaction', transaction_id=txn.id) }}" class="remove-link">Remove</a>
+            </td>         
+          {% endfor %}
+        </tbody>
+      </table>
+      <br>
+      <!-- Button to remove all selected transactions; initially hidden -->
+      <button id="removeSelectedButton" type="submit" style="display:none;">Remove Selected</button>
+    </form>
+
+    <!-- Pass removal URL template to JavaScript -->
+    <script>
+      // Use a unique placeholder "__ID__" in the URL template.
+      var removeAccountUrlTemplate = "/remove_account/";
+    </script>
+    
+    <!-- Load the external JavaScript file using the custom route -->
+    <script src="{{ url_for('serve_scripts', filename='dashboard.js') }}"></script>
+
   </body>
 </html>

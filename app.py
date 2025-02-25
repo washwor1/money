@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, send_file
+from flask import Flask, render_template, request, redirect, url_for, session, send_file, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 import io
@@ -44,6 +44,16 @@ class Transaction(db.Model):
 def index():
     return redirect(url_for('login'))
 
+# Custom route to serve CSS files from templates/css
+@app.route('/css/<path:filename>')
+def serve_css(filename):
+    return send_from_directory('templates/css', filename)
+
+# Custom route to serve JavaScript files from templates/scripts
+@app.route('/scripts/<path:filename>')
+def serve_scripts(filename):
+    return send_from_directory('templates/scripts', filename)
+
 # --- User Registration ---
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -57,10 +67,10 @@ def register():
         db.session.commit()
         
         # Optionally create default accounts for the user
-        bank_account = Account(name="Bank of America", type="bank", initial_balance=0.0, user_id=new_user.id)
-        credit_account = Account(name="Discover", type="credit", initial_balance=0.0, user_id=new_user.id)
-        db.session.add_all([bank_account, credit_account])
-        db.session.commit()
+        # bank_account = Account(name="Bank of America", type="bank", initial_balance=0.0, user_id=new_user.id)
+        # credit_account = Account(name="Discover", type="credit", initial_balance=0.0, user_id=new_user.id)
+        # db.session.add_all([bank_account, credit_account])
+        # db.session.commit()
         
         return redirect(url_for('login'))
     return render_template('register.html')
@@ -92,9 +102,9 @@ def dashboard():
         return redirect(url_for('login'))
     user = User.query.get(session['user_id'])
     
-    # Get optional date range filtering from query string
     start_date_str = request.args.get('start_date')
     end_date_str = request.args.get('end_date')
+    filter_account_id = request.args.get('filter_account_id')
     start_date = end_date = None
     if start_date_str and end_date_str:
         try:
@@ -103,13 +113,20 @@ def dashboard():
         except Exception as e:
             print("Date parsing error:", e)
     
-    # Gather transactions for all the user's accounts
     transactions = []
-    for account in user.accounts:
-        query = Transaction.query.filter_by(account_id=account.id)
+    if filter_account_id:
+        # Filter transactions for the specified account.
+        query = Transaction.query.filter_by(account_id=filter_account_id)
         if start_date and end_date:
             query = query.filter(Transaction.date >= start_date, Transaction.date <= end_date)
-        transactions += query.order_by(Transaction.date.asc(), Transaction.id.asc()).all()
+        transactions = query.order_by(Transaction.date.asc(), Transaction.id.asc()).all()
+    else:
+        # Otherwise, load transactions for all accounts.
+        for account in user.accounts:
+            query = Transaction.query.filter_by(account_id=account.id)
+            if start_date and end_date:
+                query = query.filter(Transaction.date >= start_date, Transaction.date <= end_date)
+            transactions += query.order_by(Transaction.date.asc(), Transaction.id.asc()).all()
 
     # Calculate totals per category
     category_totals = {}
@@ -158,12 +175,19 @@ def add_transaction():
     txn_date = datetime.strptime(date_str, '%Y-%m-%d').date()
 
     account = Account.query.get(account_id)
-    # Determine new balance: add amount to last balance (or account's initial balance)
+    
+    # For credit accounts, reverse the sign of the entered amount.
+    if account.type.lower() == "credit":
+        effective_amount = -amount
+    else:
+        effective_amount = amount
+    
+    # Determine new balance: add effective_amount to last balance (or account's initial balance)
     last_txn = Transaction.query.filter_by(account_id=account_id).order_by(Transaction.date.desc(), Transaction.id.desc()).first()
     if last_txn:
-        new_balance = last_txn.balance + amount
+        new_balance = last_txn.balance + effective_amount
     else:
-        new_balance = account.initial_balance + amount
+        new_balance = account.initial_balance + effective_amount
 
     new_txn = Transaction(date=txn_date,
                           description=description,
@@ -173,7 +197,9 @@ def add_transaction():
                           account_id=account_id)
     db.session.add(new_txn)
     db.session.commit()
-    return redirect(url_for('dashboard'))
+    
+    # Redirect preserving the current account filter.
+    return redirect(url_for('dashboard', filter_account_id=account_id))
 
 # --- Export Transactions as CSV ---
 @app.route('/export')
@@ -204,20 +230,92 @@ def export():
     cw = csv.writer(si)
     cw.writerow(["Date", "Account", "Description", "Amount", "Balance", "Category"])
     for txn in transactions:
-        cw.writerow([txn.date.strftime('%Y-%m-%d'),
-                     txn.account.name,
-                     txn.description,
-                     txn.amount,
-                     txn.balance,
-                     txn.category])
+        cw.writerow([
+            txn.date.strftime('%Y-%m-%d'),
+            txn.account.name,
+            txn.description,
+            txn.amount,
+            txn.balance,
+            txn.category
+        ])
     
     output = si.getvalue()
+    
+    # Generate filename based on the filter dates.
+    if start_date and end_date:
+        # Remove any leading zero from day by converting it to int before stringifying.
+        start_str = start_date.strftime('%b') + "_" + str(start_date.day) + "_" + start_date.strftime('%y')
+        end_str = end_date.strftime('%b') + "_" + str(end_date.day) + "_" + end_date.strftime('%y')
+        filename = f"{start_str}_{end_str}_transactions.csv"
+    else:
+        filename = "transactions.csv"
+    
     return send_file(
         io.BytesIO(output.encode('utf-8')),
         mimetype="text/csv",
         as_attachment=True,
-        download_name="transactions.csv"
+        download_name=filename
     )
+
+    
+# --- Removing Single Transaction --- #
+@app.route('/remove_transaction/<int:transaction_id>', methods=['GET'])
+def remove_transaction(transaction_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    txn = Transaction.query.get(transaction_id)
+    if txn and txn.account.user_id == session['user_id']:
+        account_id = txn.account.id  # Get the account id from the transaction
+        db.session.delete(txn)
+        db.session.commit()
+        return redirect(url_for('dashboard', filter_account_id=account_id))
+    return redirect(url_for('dashboard'))
+
+
+# --- Removing Multiple transactions --- #
+@app.route('/remove_transactions', methods=['POST'])
+def remove_transactions():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    txn_ids = request.form.getlist('transaction_ids')
+    # Try to preserve the current account filter from the query string.
+    filter_account_id = request.args.get('filter_account_id')
+    for txn_id in txn_ids:
+        txn = Transaction.query.get(txn_id)
+        if txn and txn.account.user_id == session['user_id']:
+            db.session.delete(txn)
+    db.session.commit()
+    return redirect(url_for('dashboard', filter_account_id=filter_account_id))
+
+
+# --- Adding New Bank Account --- #
+@app.route('/add_account', methods=['POST'])
+def add_account():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    user = User.query.get(session['user_id'])
+    name = request.form['name']
+    account_type = request.form['type']  # Expected values: 'bank' for Debit or 'credit' for Credit
+    
+    # Create and add the new account with an initial balance of 0.0
+    new_account = Account(name=name, type=account_type, initial_balance=0.0, user_id=user.id)
+    db.session.add(new_account)
+    db.session.commit()
+    
+    return redirect(url_for('dashboard'))
+
+# --- Remove Bank Account --- #
+@app.route('/remove_account/<int:account_id>', methods=['GET'])
+def remove_account(account_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    account = Account.query.get(account_id)
+    # Remove the type check so any account belonging to the user can be removed.
+    if account and account.user_id == session['user_id']:
+        db.session.delete(account)
+        db.session.commit()
+    return redirect(url_for('dashboard'))
 
 
 # --------------------------
