@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Monthly Transaction Data Analysis</title>
+    <!-- Load Chart.js from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Link to external CSS for data page -->
+    <link rel="stylesheet" href="{{ url_for('serve_css', filename='data.css') }}">
+  </head>
+  <body>
+    <h1>Monthly Transaction Data Analysis</h1>
+    <p style="text-align: center;">
+      <a href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+    </p>
+    
+    <div class="nav-buttons">
+      <button id="prevBtn">Previous Month</button>
+      <button id="nextBtn">Next Month</button>
+    </div>
+    
+    <!-- Dropdown to select bank account -->
+    <div class="account-select">
+      <label for="accountSelect">Select Account:</label>
+      <select id="accountSelect">
+        {% for account in user.accounts %}
+          <option value="{{ account.id }}">{{ account.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    
+    <!-- Chart container -->
+    <div id="chartContainer">
+      <canvas id="myChart"></canvas>
+    </div>
+    
+    <!-- Table for current month category amounts -->
+    <h2 id="currentMonthHeader">Category Spending for <span id="displayMonth"></span></h2>
+    <div class="table-container">
+      <table id="categoryTable">
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Amount</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody">
+          <!-- Filled dynamically -->
+        </tbody>
+      </table>
+      <!-- Form to select another month -->
+      <!-- Form to select another month -->
+      <form id="monthFilterForm">
+        <label for="monthInput">Select Month:</label>
+        <!-- input type="month" returns "YYYY-MM" -->
+        <input id="monthInput" type="month" name="month" value="{{ selected_month|default(date.today().strftime('%Y-%m')) }}">
+        <button type="submit">Show Month</button>
+      </form>
+    </div>
+    
+    <!-- Inject current_month variable in "MM-YYYY" format -->
+    <script>
+      const currentMonth = "{{ current_month }}"; // e.g., "03-2025"
+      console.log("Current Month:", currentMonth);      
+    </script>
+    
+    <!-- External JavaScript files -->
+    <script src="{{ url_for('serve_scripts', filename='data.js') }}"></script>
+    <script src="{{ url_for('serve_scripts', filename='tableData.js') }}"></script>
+  </body>
+</html>

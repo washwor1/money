@@ -1,44 +1,89 @@
 <!DOCTYPE html>
 <html>
   <head>
+    <meta charset="UTF-8">
     <title>Dashboard</title>
     <link rel="stylesheet" href="{{ url_for('serve_css', filename='dashboard.css') }}">
   </head>
   <body>
     <h1>Welcome, {{ user.username }}!</h1>
-    <a href="{{ url_for('logout') }}"><button>Logout</button></a>
+    <!-- Logout button -->
+    <button id="logoutButton">Logout</button>
     
-    <h2>Account Balances</h2>
-    <ul>
-      {% for account, balance in account_balances.items() %}
-        <li>{{ account }}: ${{ "%.2f"|format(balance) }}</li>
-      {% endfor %}
-    </ul>
-    <h3>Total Balance: ${{ "%.2f"|format(total_balance) }}</h3>
-
-    <!-- Account Selection (placed above the Add Transaction form) -->
-    <h2>Select an Account</h2>
-    <select id="accountSelectionDropdown">
-      <option value="">Select an Account</option>
-      {% for account in user.accounts %}
-        <option value="{{ account.id }}" data-type="{{ account.type }}" data-name="{{ account.name }}"
-          {% if filter_account_id and filter_account_id == account.id|string %}selected{% endif %}>
-          {{ account.name }}
-        </option>
-      {% endfor %}
-      <option value="add_account" {% if filter_account_id == 'add_account' %}selected{% endif %}>
-        Add New Account
-      </option>
-    </select>
-    <!-- Remove Account button placed next to the dropdown -->
-    <button type="button" id="removeAccountButton" style="display: none;">Remove Account</button>
-
-    <!-- Add Transaction Form Container (hidden until an account is selected) -->
+    <!-- Account Balances Section (Dynamic) -->
+    <div id="balancesContainer">
+      <h2>Account Balances</h2>
+      <ul id="balancesList">
+        {% for account, balance in account_balances.items() %}
+          <li>{{ account }}: ${{ "%.2f"|format(balance) }}</li>
+        {% endfor %}
+      </ul>
+      <h3 id="totalBalance">Total Balance: ${{ "%.2f"|format(total_balance) }}</h3>
+    </div>
+    
+    <!-- Account Selection Dropdown -->
+    <div class="account-select">
+      <h2>Select an Account</h2>
+      <select id="accountSelect">
+        <option value="">Select Account</option>
+        {% for account in user.accounts %}
+          <option value="{{ account.id }}"
+            {% if filter_account_id and filter_account_id == account.id|string %}selected{% endif %}>
+            {{ account.name }}
+          </option>
+        {% endfor %}
+        <option value="add_account">Add New Account</option>
+      </select>
+      <!-- Remove Account Button -->
+      <button type="button" id="removeAccountButton" style="display: none;">Remove Account</button>
+    </div>
+    
+    <!-- Modal Overlay for Adding a New Account -->
+    <div id="modalOverlay" class="modal-overlay" style="display: none;">
+      <div class="modal-content">
+        <h3>Add Account</h3>
+        <form method="POST" action="{{ url_for('add_account') }}">
+          <label>Account Name:</label>
+          <input type="text" name="name" required><br>
+          <label>Account Type:</label>
+          <select name="type">
+            <option value="debit">Debit</option>
+            <option value="credit">Credit</option>
+          </select><br>
+          <input type="submit" value="Create Account">
+          <!-- Ensure type="button" so it does not submit the form -->
+          <button type="button" id="cancelAddAccount">Cancel</button>
+        </form>
+      </div>
+    </div>
+    
+    
+    <!-- Modal Overlay for Removing an Account -->
+    <div id="removeModalOverlay" class="modal-overlay" style="display: none;">
+      <div class="modal-content">
+        <p id="removeAccountMessage">Are you sure you want to remove this account?</p>
+        <button id="confirmRemoveAccount">Yes, Remove</button>
+        <button id="cancelRemoveAccount">Cancel</button>
+      </div>
+    </div>
+    
+    <!-- Modal Overlay for Importing Transactions -->
+    <div id="importModalOverlay" class="modal-overlay" style="display: none;">
+      <div class="modal-content">
+        <h3>Import Transactions</h3>
+        <form method="POST" action="{{ url_for('import_transactions') }}" enctype="multipart/form-data">
+          <label>Select a file (CSV, TSV, or Excel):</label>
+          <input type="file" name="file" accept=".csv,.tsv,.xls,.xlsx" required><br>
+          <input type="submit" value="Import">
+          <button type="button" id="cancelImport">Cancel</button>
+        </form>
+      </div>
+    </div>
+    
+    <!-- Add Transaction Form -->
     <div id="transactionFormContainer" style="display: none;">
       <h2>Add Transaction</h2>
       <form method="POST" action="{{ url_for('add_transaction') }}">
-        <!-- Hidden field to store the selected account id -->
-             <!-- Import Transactions Button (shown with Add Transaction form) -->
         <div id="importButtonContainer" style="display: none;">
           <button type="button" id="importButton">Import Transactions</button>
         </div>
@@ -61,8 +106,6 @@
           <option value="Miscellaneous">Miscellaneous</option>
         </select>
         <br>
-        
-        <!-- Recurring Transaction Section (shown only for selected categories) -->
         <div id="recurringSection" style="display: none; margin-top: 10px;">
           <label>Is this transaction recurring?</label>
           <select name="is_recurring" id="isRecurringSelect">
@@ -70,7 +113,6 @@
             <option value="yes">Yes</option>
           </select>
           <br>
-          <!-- Frequency Section: only shown if "Yes" is selected -->
           <div id="frequencySection" style="display: none; margin-top: 10px;">
             <label>Frequency:</label>
             <select name="frequency" id="frequencySelect">
@@ -80,75 +122,35 @@
             </select>
           </div>
         </div>
-                
         <input type="submit" value="Add Transaction">
       </form>
     </div>
 
-    <!-- Modal Overlay for Adding a New Account -->
-    <div id="modalOverlay" class="modal-overlay" style="display: none;">
-      <div class="modal-content">
-        <h3>Add Account</h3>
-        <form method="POST" action="{{ url_for('add_account') }}">
-          <label>Account Name:</label>
-          <input type="text" name="name" required><br>
-          <label>Account Type:</label>
-          <select name="type">
-            <option value="bank">Debit</option>
-            <option value="credit">Credit</option>
-          </select><br>
-          <input type="submit" value="Create Account">
-          <button type="button" id="cancelAddAccount">Cancel</button>
+        <!-- Filter and Export Forms -->
+        <h2>Filter & Export Transactions</h2>
+        <form id="filterExportForm" method="GET" action="{{ url_for('dashboard') }}">
+          <label>Start Date:</label>
+          <input id="start_date" type="date" name="start_date" value="{{ start_date or '' }}"><br>
+          <label>End Date:</label>
+          <input id="end_date" type="date" name="end_date" value="{{ end_date or '' }}"><br>
+          <button type="submit" formaction="{{ url_for('dashboard') }}">Filter</button>
+          <button type="submit" formaction="{{ url_for('export') }}">Export CSV</button>
         </form>
-      </div>
-    </div>
-
-    <!-- Modal Overlay for Removing an Account -->
-    <div id="removeModalOverlay" class="modal-overlay" style="display: none;">
-      <div class="modal-content">
-        <p id="removeAccountMessage">Are you sure you want to remove this account?</p>
-        <button id="confirmRemoveAccount">Yes, Remove</button>
-        <button id="cancelRemoveAccount">Cancel</button>
-      </div>
-    </div>
-
-    <!-- Modal Overlay for Importing Transactions -->
-    <div id="importModalOverlay" class="modal-overlay" style="display: none;">
-      <div class="modal-content">
-        <h3>Import Transactions</h3>
-        <form method="POST" action="{{ url_for('import_transactions') }}" enctype="multipart/form-data">
-          <label>Select a file (CSV, TSV, or Excel):</label>
-          <input type="file" name="file" accept=".csv,.tsv,.xls,.xlsx" required><br>
-          <input type="submit" value="Import">
-          <button type="button" id="cancelImport">Cancel</button>
+        
+        <!-- Month Filter Form -->
+        <h2>Show Transactions for a Specific Month</h2>
+        <form id="monthFilterForm" method="GET" action="{{ url_for('dashboard') }}">
+          <label for="month">Select Month:</label>
+          <!-- input type="month" expects "YYYY-MM" -->
+          <input id="month" type="month" name="month" value="{{ selected_month }}">
+          <button type="submit">Show Month</button>
         </form>
-      </div>
-    </div>
-
-    <!-- Filter and Export -->
-    <h2>Filter & Export Transactions</h2>
-    <form id="filterExportForm" method="GET" action="{{ url_for('dashboard') }}">
-      <label>Start Date:</label>
-      <input id="start_date" type="date" name="start_date" value="{{ start_date or '' }}"><br>
-      <label>End Date:</label>
-      <input id="end_date" type="date" name="end_date" value="{{ end_date or '' }}"><br>
-      <button type="submit" formaction="{{ url_for('dashboard') }}">Filter</button>
-      <button type="submit" formaction="{{ url_for('export') }}">Export CSV</button>
-    </form>
-
-    <!-- Month Filter Form -->
-    <h2>Show Transactions for a Specific Month</h2>
-    <form id="monthFilterForm" method="GET" action="{{ url_for('dashboard') }}">
-      <label for="month">Select Month:</label>
-      <!-- The input type 'month' returns a string in the format "YYYY-MM" -->
-      <input id="month" type="month" name="month" value="{{ selected_month or '' }}">
-      <button type="submit">Show Month</button>
-    </form>
-
-    <!-- Transactions Table with Removal Options -->
-    <h2>Transaction History</h2>
-    <form id="removeTransactionsForm" method="POST" action="{{ url_for('remove_transactions') }}">
-      <table border="1" cellpadding="5">
+        <a href="{{ url_for('data_page', month_year=selected_month) }}">View Monthly Data Visualization</a>
+    
+    <!-- Transactions Table (Dynamic) -->
+    <div id="transactionsContainer">
+      <h2>Transaction History</h2>
+      <table id="transactionsTable">
         <thead>
           <tr>
             <th>Select</th>
@@ -163,12 +165,10 @@
             <th>Action</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody id="transactionsList">
           {% for txn in transactions %}
           <tr>
-            <td>
-              <input type="checkbox" name="transaction_ids" value="{{ txn.id }}">
-            </td>
+            <td><input type="checkbox" name="transaction_ids" value="{{ txn.id }}"></td>
             <td>{{ txn.date.strftime('%m/%d/%Y') }}</td>
             <td>{{ txn.account.name }}</td>
             <td>{{ txn.description }}</td>
@@ -194,17 +194,17 @@
           {% endfor %}
         </tbody>
       </table>
-      
-      <br>
-      <button id="removeSelectedButton" type="submit" style="display:none;">Remove Selected</button>
-    </form>
-
-    <!-- Pass removal URL template to JavaScript for account removal -->
+    </div>
+    
+    <!-- Inject global variables for JS -->
     <script>
+      const logoutUrl = "{{ url_for('logout') }}";
+      const currentMonth = "{{ selected_month|default(date.today().strftime('%Y-%m')) }}";
+      console.log("Current Month:", currentMonth);
       var removeAccountUrlTemplate = "/remove_account/";
     </script>
     
-    <!-- Load the external JavaScript file -->
+    <!-- Load external JavaScript file -->
     <script src="{{ url_for('serve_scripts', filename='dashboard.js') }}"></script>
   </body>
 </html>

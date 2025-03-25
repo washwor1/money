@@ -1,195 +1,197 @@
-// ----- New Account Selection Handling -----
-var accountSelectionDropdown = document.getElementById("accountSelectionDropdown");
-var transactionFormContainer = document.getElementById("transactionFormContainer");
-var selectedAccountInput = document.getElementById("selectedAccountInput");
-var removeAccountButton = document.getElementById("removeAccountButton");
-
-accountSelectionDropdown.addEventListener("change", function() {
-  var selectedValue = accountSelectionDropdown.value;
-  if (selectedValue === "") {
-    // No account selected; hide transaction form, remove button, and import button.
-    transactionFormContainer.style.display = "none";
-    selectedAccountInput.value = "";
-    removeAccountButton.style.display = "none";
-    var importContainer = document.getElementById("importButtonContainer");
-    if (importContainer) {
-      importContainer.style.display = "none";
-    }
-  } else if (selectedValue === "add_account") {
-    // "Add New Account" selected: hide transaction form, remove and import buttons; show add account modal.
-    transactionFormContainer.style.display = "none";
-    removeAccountButton.style.display = "none";
-    var importContainer = document.getElementById("importButtonContainer");
-    if (importContainer) {
-      importContainer.style.display = "none";
-    }
-    document.getElementById("modalOverlay").style.display = "flex";
-  } else {
-    // Valid account selected: update hidden field, show transaction form, remove account button, and import button.
-    selectedAccountInput.value = selectedValue;
-    transactionFormContainer.style.display = "block";
-    removeAccountButton.style.display = "inline-block";
-    var importContainer = document.getElementById("importButtonContainer");
-    if (importContainer) {
-      importContainer.style.display = "block";
+document.addEventListener("DOMContentLoaded", function() {
+    // Logout handling.
+    const logoutButton = document.getElementById("logoutButton");
+    if (logoutButton) {
+        logoutButton.addEventListener("click", function() {
+            window.location.href = logoutUrl;
+        });
     }
     
-    // Update the URL query parameter if needed.
-    var urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('filter_account_id') !== selectedValue) {
-      urlParams.set('filter_account_id', selectedValue);
-      window.location.search = urlParams.toString();
+    // Account selection dropdown and related elements.
+    const accountSelect = document.getElementById("accountSelect");
+    const transactionFormContainer = document.getElementById("transactionFormContainer");
+    const selectedAccountInput = document.getElementById("selectedAccountInput");
+
+    // Function to update dashboard data via AJAX.
+    function updateDashboard() {
+        // If "add_account" is selected, do not update dashboard.
+        if (accountSelect.value === "add_account") return;
+        
+        let accountId = accountSelect.value;
+        let url = '/dashboard_data?';
+        
+        if (accountId) {
+            url += `account_id=${accountId}&`;
+        }
+        
+        // Check for start_date and end_date filters.
+        const startDateEl = document.getElementById("start_date");
+        const endDateEl = document.getElementById("end_date");
+        if (startDateEl && endDateEl && startDateEl.value && endDateEl.value) {
+            url += `start_date=${startDateEl.value}&end_date=${endDateEl.value}&`;
+        }
+        
+        // Check for month filter.
+        const monthEl = document.getElementById("month");
+        if (monthEl && monthEl.value) {
+            url += `month=${monthEl.value}&`;
+        }
+        
+        // Remove trailing '&' if present.
+        url = url.endsWith('&') ? url.slice(0, -1) : url;
+        
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    console.error("Dashboard error:", data.error);
+                    return;
+                }
+                // Update account balances.
+                const balancesList = document.getElementById("balancesList");
+                if (balancesList) {
+                    let balancesHtml = "";
+                    for (let acc in data.account_balances) {
+                        balancesHtml += `<li>${acc}: $${Number(data.account_balances[acc]).toFixed(2)}</li>`;
+                    }
+                    balancesList.innerHTML = balancesHtml;
+                }
+                // Update total balance.
+                const totalBalanceEl = document.getElementById("totalBalance");
+                if (totalBalanceEl) {
+                    totalBalanceEl.textContent = `Total Balance: $${Number(data.total_balance).toFixed(2)}`;
+                }
+                // Update transactions list.
+                const transactionsList = document.getElementById("transactionsList");
+                if (transactionsList) {
+                    transactionsList.innerHTML = data.transactions_html;
+                }
+            })
+            .catch(err => console.error("Error updating dashboard:", err));
     }
-  }
-});
-
-// ----- Trigger change event on page load if an account is already selected ----- 
-document.addEventListener("DOMContentLoaded", function() {
-  // If the dropdown's value is non-empty and not "add_account", dispatch a change event.
-  if (accountSelectionDropdown.value && accountSelectionDropdown.value !== "add_account") {
-    accountSelectionDropdown.dispatchEvent(new Event('change'));
-  }
-});
-
-// ----- Cancel button on the Add Account Popup -----
-var cancelAddAccount = document.getElementById("cancelAddAccount");
-cancelAddAccount.addEventListener("click", function() {
-  document.getElementById("modalOverlay").style.display = "none";
-  accountSelectionDropdown.selectedIndex = 0;
-  transactionFormContainer.style.display = "none";
-  removeAccountButton.style.display = "none";
-  var importContainer = document.getElementById("importButtonContainer");
-  if (importContainer) {
-    importContainer.style.display = "none";
-  }
-});
-
-// ----- Remove Account Button Handling -----
-var selectedAccountId = null;
-removeAccountButton.addEventListener("click", function() {
-  var selectedOption = accountSelectionDropdown.options[accountSelectionDropdown.selectedIndex];
-  selectedAccountId = selectedOption.value;
-  var accountName = selectedOption.dataset.name;
-  document.getElementById("removeAccountMessage").innerText =
-    "Are you sure you want to remove the account '" + accountName + "'?";
-  document.getElementById("removeModalOverlay").style.display = "flex";
-});
-
-var cancelRemoveAccount = document.getElementById("cancelRemoveAccount");
-cancelRemoveAccount.addEventListener("click", function() {
-  document.getElementById("removeModalOverlay").style.display = "none";
-});
-
-var confirmRemoveAccount = document.getElementById("confirmRemoveAccount");
-confirmRemoveAccount.addEventListener("click", function() {
-  if (selectedAccountId) {
-    window.location.href = removeAccountUrlTemplate + selectedAccountId;
-  }
-});
-
-// ----- Import Modal Handling -----
-var importButton = document.getElementById("importButton");
-var importModalOverlay = document.getElementById("importModalOverlay");
-var cancelImport = document.getElementById("cancelImport");
-
-importButton.addEventListener("click", function() {
-  importModalOverlay.style.display = "flex";
-});
-
-cancelImport.addEventListener("click", function() {
-  importModalOverlay.style.display = "none";
-});
-
-// ----- Remove Selected Button for Transactions -----
-function updateRemoveSelectedButtonVisibility() {
-  var checkboxes = document.querySelectorAll("input[type='checkbox'][name='transaction_ids']");
-  var removeSelectedButton = document.getElementById("removeSelectedButton");
-  var anyChecked = false;
-  
-  checkboxes.forEach(function(checkbox) {
-    if (checkbox.checked) {
-      anyChecked = true;
+    
+    
+    // Initial dashboard update.
+    updateDashboard();
+    
+    // Account selection change handler.
+    if (accountSelect) {
+        accountSelect.addEventListener("change", function() {
+            let selectedValue = accountSelect.value;
+            if (selectedValue === "") {
+                // Hide add transaction form and clear hidden field.
+                if (transactionFormContainer) {
+                    transactionFormContainer.style.display = "none";
+                }
+                if (selectedAccountInput) {
+                    selectedAccountInput.value = "";
+                }
+                // Hide remove account button.
+                const removeAccountButton = document.getElementById("removeAccountButton");
+                if (removeAccountButton) {
+                    removeAccountButton.style.display = "none";
+                }
+                // Hide import button container.
+                const importContainer = document.getElementById("importButtonContainer");
+                if (importContainer) {
+                    importContainer.style.display = "none";
+                }
+            } else if (selectedValue === "add_account") {
+                // Show the add account modal.
+                const modalOverlay = document.getElementById("modalOverlay");
+                if (modalOverlay) {
+                    modalOverlay.style.display = "flex";
+                }
+                // Attach event for cancel inside this branch if not already attached.
+                const cancelAddAccount = document.getElementById("cancelAddAccount");
+                if (cancelAddAccount) {
+                    cancelAddAccount.addEventListener("click", function() {
+                        const modalOverlay = document.getElementById("modalOverlay");
+                        if (modalOverlay) {
+                            modalOverlay.style.display = "none";
+                        }
+                        // Reset dropdown to default.
+                        accountSelect.selectedIndex = 0;
+                        updateDashboard();
+                    });
+                } else {
+                    console.error("Cancel Add Account button not found.");
+                }
+            } else {
+                // Valid account selected: show the add transaction form and set hidden field.
+                if (selectedAccountInput) {
+                    selectedAccountInput.value = selectedValue;
+                }
+                if (transactionFormContainer) {
+                    transactionFormContainer.style.display = "block";
+                }
+                // Show the remove account button.
+                const removeAccountButton = document.getElementById("removeAccountButton");
+                if (removeAccountButton) {
+                    removeAccountButton.style.display = "inline-block";
+                }
+                // Show the import button container.
+                const importContainer = document.getElementById("importButtonContainer");
+                if (importContainer) {
+                    importContainer.style.display = "block";
+                }
+            }
+            updateDashboard();
+        });
     }
-  });
-  
-  removeSelectedButton.style.display = anyChecked ? "inline-block" : "none";
-}
-
-document.addEventListener("DOMContentLoaded", function() {
-  var checkboxes = document.querySelectorAll("input[type='checkbox'][name='transaction_ids']");
-  checkboxes.forEach(function(checkbox) {
-    checkbox.addEventListener("change", updateRemoveSelectedButtonVisibility);
-  });
-  updateRemoveSelectedButtonVisibility();
+    
+    // Remove Account Modal Handling.
+    const removeAccountButton = document.getElementById("removeAccountButton");
+    const cancelRemoveAccount = document.getElementById("cancelRemoveAccount");
+    const confirmRemoveAccount = document.getElementById("confirmRemoveAccount");
+    let selectedAccountId = null;
+    if (removeAccountButton) {
+        removeAccountButton.addEventListener("click", function() {
+            const selectedOption = accountSelect.options[accountSelect.selectedIndex];
+            selectedAccountId = selectedOption.value;
+            const accountName = selectedOption.textContent;
+            const removeMessage = document.getElementById("removeAccountMessage");
+            if (removeMessage) {
+                removeMessage.textContent = "Are you sure you want to remove the account '" + accountName + "'?";
+            }
+            const removeModalOverlay = document.getElementById("removeModalOverlay");
+            if (removeModalOverlay) {
+                removeModalOverlay.style.display = "flex";
+            }
+        });
+    }
+    if (cancelRemoveAccount) {
+        cancelRemoveAccount.addEventListener("click", function() {
+            const removeModalOverlay = document.getElementById("removeModalOverlay");
+            if (removeModalOverlay) {
+                removeModalOverlay.style.display = "none";
+            }
+        });
+    }
+    if (confirmRemoveAccount) {
+        confirmRemoveAccount.addEventListener("click", function() {
+            if (selectedAccountId) {
+                window.location.href = `/remove_account/${selectedAccountId}`;
+            }
+        });
+    }
+    
+    // Import Modal Handling.
+    const importButton = document.getElementById("importButton");
+    const importModalOverlay = document.getElementById("importModalOverlay");
+    const cancelImport = document.getElementById("cancelImport");
+    if (importButton) {
+        importButton.addEventListener("click", function() {
+            if (importModalOverlay) {
+                importModalOverlay.style.display = "flex";
+            }
+        });
+    }
+    if (cancelImport) {
+        cancelImport.addEventListener("click", function() {
+            if (importModalOverlay) {
+                importModalOverlay.style.display = "none";
+            }
+        });
+    }
 });
-
-// ----- Auto-submit Filter Form when both dates are provided -----
-document.addEventListener("DOMContentLoaded", function() {
-  var filterExportForm = document.getElementById('filterExportForm');
-  var startDateInput = document.getElementById('start_date');
-  var endDateInput = document.getElementById('end_date');
-
-  function autoSubmitForm() {
-    if (startDateInput.value && endDateInput.value) {
-      filterExportForm.submit();
-    }
-  }
-
-  startDateInput.addEventListener("change", autoSubmitForm);
-  endDateInput.addEventListener("change", autoSubmitForm);
-});
-
-// ----- Recurring Transaction Handling -----
-var categorySelect = document.getElementById("categorySelect");
-var recurringSection = document.getElementById("recurringSection");
-var isRecurringSelect = document.getElementById("isRecurringSelect");
-var frequencySection = document.getElementById("frequencySection");
-var frequencySelect = document.getElementById("frequencySelect");
-var recurringDateSection = document.getElementById("recurringDateSection");
-
-// When the category changes, show recurring options for Rent or Entertainment.
-if (categorySelect) {
-  categorySelect.addEventListener("change", function() {
-    var selectedCategory = categorySelect.value;
-    if (selectedCategory === "Rent" || selectedCategory === "Entertainment") {
-      recurringSection.style.display = "block";
-    } else {
-      recurringSection.style.display = "none";
-      // Reset the recurring options.
-      if (isRecurringSelect) {
-        isRecurringSelect.value = "no";
-      }
-      if (frequencySelect) {
-        frequencySelect.value = "";
-      }
-      recurringDateSection.style.display = "none";
-      frequencySection.style.display = "none";
-    }
-  });
-}
-
-// When the user selects if the transaction is recurring.
-if (isRecurringSelect) {
-  isRecurringSelect.addEventListener("change", function() {
-    if (isRecurringSelect.value === "yes") {
-      frequencySection.style.display = "block";
-    } else {
-      frequencySection.style.display = "none";
-      if (frequencySelect) {
-        frequencySelect.value = "";
-      }
-      recurringDateSection.style.display = "none";
-    }
-  });
-}
-
-// When the frequency is selected, show the recurring date field.
-if (frequencySelect) {
-  frequencySelect.addEventListener("change", function() {
-    if (frequencySelect.value === "monthly" || frequencySelect.value === "yearly") {
-      recurringDateSection.style.display = "block";
-    } else {
-      recurringDateSection.style.display = "none";
-    }
-  });
-}

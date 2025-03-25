@@ -1,36 +1,137 @@
 /* Modal overlay covers the entire viewport and blurs the background */
 .modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  backdrop-filter: blur(5px);
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+  
+/* Modal content styling */
+.modal-content {
+  background: white;
+  padding: 20px;
+  border-radius: 5px;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+}
+
+/* Buttons to remove transactions */
+.remove-link {
+  padding: 5px 10px;
+  background-color: #d9534f;
+  color: white;
+  text-decoration: none;
+  border-radius: 4px;
+}
+.remove-link:hover {
+  background-color: #c9302c;
+  text-decoration: underline;
+}
+
+/* Table Styles for the transactions list */
+/* Table Container */
+#transactionsContainer {
+  width: 100%;
+  overflow-x: auto;
+  margin-top: 20px;
+}
+
+/* Base Table Styling */
+#transactionsTable {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+}
+
+/* Table Header */
+#transactionsTable thead tr {
+  background-color: #007BFF;
+  color: #ffffff;
+  text-align: left;
+  border-bottom: 2px solid #0056b3;
+}
+
+#transactionsTable th {
+  padding: 12px 15px;
+}
+
+/* Table Body */
+#transactionsTable tbody tr {
+  border-bottom: 1px solid #dddddd;
+  transition: background-color 0.3s ease;
+}
+
+#transactionsTable tbody tr:nth-of-type(even) {
+  background-color: #f9f9f9;
+}
+
+#transactionsTable tbody tr:nth-of-type(odd) {
+  background-color: #ffffff;
+}
+
+#transactionsTable tbody tr:hover {
+  background-color: #f1f1f1;
+}
+
+#transactionsTable td {
+  padding: 12px 15px;
+}
+
+/* Remove Link Button Styling */
+.remove-link {
+  padding: 5px 10px;
+  background-color: #dc3545;
+  color: #fff;
+  text-decoration: none;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.remove-link:hover {
+  background-color: #c82333;
+}
+
+/* Responsive Design */
+@media screen and (max-width: 768px) {
+  #transactionsTable thead {
+    display: none;
+  }
+  
+  #transactionsTable, 
+  #transactionsTable tbody, 
+  #transactionsTable tr, 
+  #transactionsTable td {
+    display: block;
     width: 100%;
-    height: 100%;
-    backdrop-filter: blur(5px);
-    background: rgba(0, 0, 0, 0.4);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
   }
   
-  /* Modal content styling */
-  .modal-content {
-    background: white;
-    padding: 20px;
-    border-radius: 5px;
-    max-width: 400px;
-    width: 90%;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+  #transactionsTable tr {
+    margin-bottom: 15px;
   }
   
-  /* Buttons to remove transactions */
-  .remove-link {
-    padding: 5px 10px;
-    background-color: #d9534f;
-    color: white;
-    text-decoration: none;
-    border-radius: 4px;
+  #transactionsTable td {
+    text-align: right;
+    padding-left: 50%;
+    position: relative;
   }
-  .remove-link:hover {
-    background-color: #c9302c;
+  
+  #transactionsTable td::before {
+    content: attr(data-label);
+    position: absolute;
+    left: 0;
+    width: 45%;
+    padding-left: 15px;
+    font-weight: bold;
+    text-align: left;
   }
+}
